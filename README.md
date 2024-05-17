@@ -1,3 +1,5 @@
+[![NPM](https://nodei.co/npm/drizzle-schema-generator.png)](https://nodei.co/npm/drizzle-schema-generator/)
+
 # Drizzle schema generator
 
 Automatically generate of Drizzle ORM schema from existing database
