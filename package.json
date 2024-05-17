@@ -1,0 +1,48 @@
+{
+  "name": "drizzle-schema-generator",
+  "type": "module",
+  "author": "Edsol",
+  "version": "0.0.1",
+  "description": "Automatically generate of Drizzle schema from existing database",
+  "main": "index.js",
+  "scripts": {
+    "start": "bun src/test.ts",
+    "dev": "bun --watch src/test.ts",
+    "build": "bun build --compile ./src/main.ts --outfile=dist/app",
+    "prod": "bun run dist/app",
+    "test": "no test"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@apollo/server": "^4.10.4",
+    "dotenv": "^16.4.5",
+    "drizzle": "^1.4.0",
+    "drizzle-graphql": "^0.4.0",
+    "drizzle-orm": "^0.30.10",
+    "graphql": "^16.8.1",
+    "mysql": "^2.18.1",
+    "mysql2": "^3.9.7",
+    "ts-node": "^10.9.2"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.21.1"
+  },
+  "keywords": [
+    "drizzle",
+    "pg",
+    "mysql",
+    "postgresql",
+    "postgres",
+    "sqlite",
+    "database",
+    "sql",
+    "typescript",
+    "ts",
+    "graphql"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/drizzle-team/drizzle-graphql.git"
+  },
+  "homepage": "https://orm.drizzle.team/docs/graphql"
+}
