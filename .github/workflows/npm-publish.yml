@@ -13,15 +13,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - uses: actions/setup-node@v3
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
       with:
-        node-version: 20
+        node-version: "lts/*"
         registry-url: https://registry.npmjs.org/
     - uses: oven-sh/setup-bun@v1
       with:
         bun-version: latest
-    - run: bun i
+
+    - name: Install latest NPM
+      run: npm install -g npm@latest
+
     - run: bun test
+
     - run: npm run build && npm publish
       env:
         NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
+        NPM_TOKEN: ${{secrets.NPM_TOKEN}}
