@@ -1,5 +1,5 @@
 import { MySqlTable } from "drizzle-orm/mysql-core";
-import { TableColumn, TableInfo } from "../types";
+import { TableInfo } from "../types";
 
 export interface AdapterInterface {
 
