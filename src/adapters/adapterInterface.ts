@@ -12,4 +12,5 @@ export interface AdapterInterface {
     getTableColumns(tableName: string): Promise<QueryResult>;
     buildTableRelations(tableName: string);
     buildTableSchema(tableName: string): Promise<MySqlTable>;
+    setColumnParams(column, drizzleColumn);
 }

@@ -25,9 +25,11 @@ import {
 import { drizzle } from "drizzle-orm/mysql2";
 
 import { TableColumn } from "../types";
-import { pluralizeSnakeCase, truncateForeignKey } from '../utils/wordManipulator';
+const pluralize = require('pluralize');
 import { AdapterConnection } from "./type";
 import { AdapterInterface } from "./adapterInterface";
+
+import { encycle, decycle } from "json-cyclic"
 
 export default class Mysql implements AdapterInterface {
     availableTypes = [
@@ -220,7 +222,7 @@ export default class Mysql implements AdapterInterface {
         }
         const relationTable = this.mySchema[tableName];
 
-        this.mySchema[`${tableName} References`] = relations(
+        this.mySchema[`${tableName}Relations`] = relations(
             relationTable,
             ({ one, many }) => {
                 const relations = {};
@@ -241,7 +243,10 @@ export default class Mysql implements AdapterInterface {
                 for (const foreignKey of manyForeignKeys) {
                     const columnName = foreignKey.COLUMN_NAME;
                     const TableName = foreignKey.TABLE_NAME;
-                    const pluralizedName = pluralizeSnakeCase(TableName);
+                    const ReferencedTableName = foreignKey.REFERENCED_TABLE_NAME;
+                    const pluralizedName = pluralize(TableName);
+
+
 
                     relations[pluralizedName.trim()] = many(this.mySchema[TableName]);
                 }
@@ -318,6 +323,8 @@ export default class Mysql implements AdapterInterface {
                         drizzleColumns[columnName] = text(columnName);
                         break;
                 }
+
+                drizzleColumns[columnName] = this.setColumnParams(column, drizzleColumns[columnName]);
             }
         }
 
@@ -325,5 +332,25 @@ export default class Mysql implements AdapterInterface {
         const drizzleTable = mysqlTable(tableName, drizzleColumns);
 
         return drizzleTable;
+    }
+
+    private setColumnParams(column, drizzleColumn) {
+        if (column.Key === 'PRI') {
+            drizzleColumn.config.primaryKey = true;
+            drizzleColumn.primaryKey();
+        }
+
+        if (column.Extra === 'auto_increment') {
+            drizzleColumn.config.autoIncrement = true;
+        }
+
+        if (column.Null === 'YES') {
+            drizzleColumn.config.notNull = false;
+        }
+
+        if (column.Default !== null) {
+            drizzleColumn.config.hasDefault = true;
+        }
+        return drizzleColumn;
     }
 }
