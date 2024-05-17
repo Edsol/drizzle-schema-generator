@@ -6,7 +6,7 @@ export class Adapter {
 
 	private databaseAdapter;
 	private connectionParams: AdapterConnection;
-	private adapter: MySql;
+	private adapter: Mysql;
 
 	private availableAdapter = {
 		mysql: (connection: AdapterConnection) => {

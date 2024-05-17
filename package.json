@@ -1,15 +1,14 @@
 {
   "name": "drizzle-schema-generator",
   "type": "module",
-  "author": "Edsol",
+  "author": "Edsol <contact@edsol.dev>",
   "version": "0.0.1",
   "description": "Automatically generate of Drizzle ORM schema from existing database",
   "main": "index.js",
   "scripts": {
-    "start": "bun src/test.ts",
-    "dev": "bun --watch src/test.ts",
-    "build": "bun build --compile ./src/main.ts --outfile=dist/app",
-    "prod": "bun run dist/app",
+    "start": "bun src/index.ts",
+    "dev": "bun --watch src/index.ts",
+    "build": "npx tsx scripts/builds.ts",
     "test": "no test"
   },
   "license": "Apache-2.0",
@@ -18,7 +17,9 @@
     "graphql": "^16.8.1",
     "mysql": "^2.18.1",
     "mysql2": "^3.9.7",
-    "ts-node": "^10.9.2"
+    "ts-node": "^10.9.2",
+    "tsup": "^8.0.2",
+    "zx": "^8.1.0"
   },
   "devDependencies": {
     "drizzle-kit": "^0.21.1"

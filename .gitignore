@@ -1,3 +1,5 @@
 node_modules
 .env
 bun.lockb
+.DS_Store
+dist
