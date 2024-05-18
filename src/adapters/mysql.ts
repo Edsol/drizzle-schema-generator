@@ -1,11 +1,11 @@
 import { Connection, QueryResult } from "mysql2/promise";
 import mysql from "mysql2/promise";
 import { MySql2Database, MySqlQueryResult } from "drizzle-orm/mysql2";
-import { sql, relations, ColumnBuilder, InferSelectModel, InferInsertModel } from "drizzle-orm";
-import * as drizzleMysqlCore from "drizzle-orm/mysql-core";
+import { sql, relations, ColumnBuilder } from "drizzle-orm";
+import * as mysqlCore from "drizzle-orm/mysql-core";
 import { drizzle } from "drizzle-orm/mysql2";
 
-import { TableColumn, AdapterConnection } from "../types";
+import { TableColumn, AdapterConnection, TableInfo } from "../types";
 import { AdapterInterface } from "./adapterInterface";
 const pluralize = require('pluralize');
 
@@ -19,8 +19,8 @@ export default class Mysql implements AdapterInterface {
     databaseName?: string;
     db: MySql2Database;
     tableNameList: string[];
-    mySchema = {};
-    tables = {};
+    schema;
+    relations = [];
 
     protected connectionParams: AdapterConnection;
 
@@ -52,11 +52,13 @@ export default class Mysql implements AdapterInterface {
     async extractSchema() {
         await this.connect();
 
+        this.schema = mysqlCore.mysqlDatabase(this.databaseName ?? 'schema');
+
         await this.getTableList();
-        await this.buildTableSchema(this.tableNameList);
+        await this.buildTables(this.tableNameList);
         await this.buildTableRelations(this.tableNameList);
 
-        return this.mySchema;
+        return this.schema;
     }
     /**
      *
@@ -153,13 +155,38 @@ export default class Mysql implements AdapterInterface {
         return results;
     }
 
+    private async getForeignKey(tableName: string, columnName: string): Promise<TableInfo | undefined> {
+        const query = sql`
+        SELECT
+        CONSTRAINT_NAME, 
+        TABLE_NAME,
+        COLUMN_NAME, 
+        REFERENCED_TABLE_NAME, 
+        REFERENCED_COLUMN_NAME
+        FROM
+            INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+        WHERE
+        TABLE_SCHEMA = ${this.databaseName}
+        AND TABLE_NAME = ${tableName}
+        AND COLUMN_NAME = ${columnName}
+        AND REFERENCED_TABLE_NAME IS NOT NULL;
+    `;
+
+        const [results]: MySqlQueryResult = await this.db.execute(query);
+
+        if (results.length === 0) {
+            return undefined;
+        }
+        return results[0];
+    }
+
     /**
- *
- *
- * @param {string} tableName
- * @return {*}  {Promise<Array<TableInfo>>}
- * @memberof MySql
- */
+     *
+     *
+     * @param {string} tableName
+     * @return {*}  {Promise<Array<TableInfo>>}
+     * @memberof MySql
+     */
     async getForeignKeys(tableName: string): Promise<TableInfo[]> {
         const query = sql`
                 SELECT
@@ -207,11 +234,11 @@ export default class Mysql implements AdapterInterface {
      * @return {*}  {MySqlTable}
      * @memberof Mysql
      */
-    private getExistingTable(tableName: string): drizzleMysqlCore.AnyMySqlTable | undefined {
-        if (this.mySchema === undefined) {
+    private getExistingTable(tableName: string): mysqlCore.AnyMySqlTable | undefined {
+        if (this.schema === undefined) {
             return undefined;
         }
-        return this.mySchema[tableName];
+        return this.schema[tableName];
     }
     /**
      *
@@ -232,29 +259,41 @@ export default class Mysql implements AdapterInterface {
      * @return {} 
      * @memberof MySql
      */
-    async buildTableSchema(tableList: string[]) {
+    async buildTables(tableList: string[]) {
+        const tables = {};
+
         for (const tableName of tableList) {
-            const tableColumns = {};
+            this.schema[tableName] = await this.buildTable(tableName);
+        }
 
-            const columns: TableColumn[] = await this.getTableColumns(tableName);
-            for (const column of columns) {
-                if (drizzleMysqlCore[column.type]) {
-                    if (column.type === 'varchar') {
-                        tableColumns[column.name] = drizzleMysqlCore[column.type](column.name, column.char_length);
-                    } else if (column.type === 'bigint') {
-                        tableColumns[column.name] = drizzleMysqlCore[column.type](column.name, column.num_precision);
-                    } else {
-                        tableColumns[column.name] = drizzleMysqlCore[column.type](column.name);
-                    }
+        return tables;
+    }
+
+    private async buildTable(tableName: string) {
+        const tableColumns = {};
+
+        const columns: TableColumn[] = await this.getTableColumns(tableName);
+        for (const column of columns) {
+            if (mysqlCore[column.type]) {
+                if (column.type === 'varchar') {
+                    tableColumns[column.name] = mysqlCore[column.type](column.name, column.char_length);
+                } else if (column.type === 'bigint') {
+                    tableColumns[column.name] = mysqlCore[column.type](column.name, column.num_precision);
                 } else {
-                    tableColumns[column.name] = drizzleMysqlCore.text(column.name);
+                    tableColumns[column.name] = mysqlCore[column.type](column.name);
                 }
-
-                tableColumns[column.name] = this.setColumnParams(column, tableColumns[column.name], tableName);
+            } else {
+                tableColumns[column.name] = mysqlCore.text(column.name);
             }
 
-            this.mySchema[tableName] = drizzleMysqlCore.mysqlTable(tableName, tableColumns);
+            const foreignKey = await this.getForeignKey(tableName, column.name);
+
+            const columnWithMeta = this.setColumnParams(column, tableColumns[column.name], tableName, foreignKey);
+
+            tableColumns[column.name] = columnWithMeta;
         }
+
+        return this.schema.table(tableName, tableColumns);
     }
 
     /**
@@ -267,21 +306,23 @@ export default class Mysql implements AdapterInterface {
      * @return {*} 
      * @memberof Mysql
      */
-    private setColumnParams(column: TableColumn, tableColumn: ColumnBuilder, tableName: string) {
+    private setColumnParams(column: TableColumn, tableColumn: ColumnBuilder, tableName: string, foreignKey?: TableInfo) {
         switch (column.column_key) {
             case "PRI":
-                // drizzleColumn.primaryKey = true;
-                tableColumn.primaryKey();
+                tableColumn.autoincrement().primaryKey();
                 break;
             case "PI":
                 break;
             case "MUL":
-                // console.log({ column, drizzleColumn: drizzleColumn.config }, tableName);
+                if (tableName === 'filiale' && foreignKey !== undefined) {
+                    const table = this.getExistingTable(foreignKey.REFERENCED_TABLE_NAME);
+                    tableColumn.references(() => table[foreignKey.REFERENCED_COLUMN_NAME])
+                }
                 break;
         }
 
         if (column.extra === 'auto_increment') {
-            // drizzleColumn.config.autoIncrement = true;
+            tableColumn.autoincrement();
         }
 
         if (column.nullable === 'NO') {
@@ -292,15 +333,6 @@ export default class Mysql implements AdapterInterface {
             tableColumn.default(column.column_default);
         }
 
-        if (column.name.endsWith("_id")) {
-            const columnFieldWithoutId = column.name.substring(0, column.name.length - 3);
-            if (this.isTable(columnFieldWithoutId)) {
-                const referencedTable = this.getExistingTable(columnFieldWithoutId);
-                // console.log(`Set references for: ${ tableName }:${ column.name } - ${ columnFieldWithoutId }.id`);
-                tableColumn.references(() => { referencedTable[id] });
-            }
-        }
-
         return tableColumn;
     }
 
@@ -308,13 +340,17 @@ export default class Mysql implements AdapterInterface {
      *
      *
      * @param {string} tableName
-     * @param {MySqlSchema} mySchema
+     * @param {MySqlSchema} schema
      * @return {*} 
      * @memberof MySql
     */
     async buildTableRelations(tableList: string[]) {
         for (const tableName of tableList) {
             const relationTable = this.getExistingTable(tableName);
+
+            if (relationTable === undefined) {
+                continue;
+            }
 
             const foreignKeys = await this.getForeignKeys(tableName);
             const manyForeignKeys = await this.getForeignKeyOf(tableName, "id");
@@ -323,8 +359,7 @@ export default class Mysql implements AdapterInterface {
                 let relations = {};
 
                 const oneRelations = this.buildOneRelation(tableName, foreignKeys, one);
-                const manyRelations = this.buildManyRelation(tableName, manyForeignKeys, many);
-
+                const manyRelations = this.buildManyRelation(manyForeignKeys, many);
                 relations = { ...oneRelations, ...manyRelations };
 
                 // const relationsValue = Object.values(relations);
@@ -335,14 +370,11 @@ export default class Mysql implements AdapterInterface {
                 return relations;
             });
 
-            const relationName = `${tableName} Relations`;
-
-            if (this.mySchema[relationName]) {
-                console.log(`Table Relation ${relationName} already exists`);
-            }
-            this.mySchema[relationName] = tableRelation;
+            const relationName = `${tableName}Relations`;
+            this.schema[relationName] = tableRelation;
         }
     }
+
     /**
      *
      *
@@ -364,10 +396,9 @@ export default class Mysql implements AdapterInterface {
             const referencedTable = this.getExistingTable(referencedTableName);
             const randomString = (Math.random() + 1).toString(36).substring(7);
 
-            relations[referencedTableName.trim()] = one(referencedTable, {
+            relations[referencedTableName] = one(referencedTable, {
                 fields: [relationTable[columnName]],
                 references: [referencedTable[referencedColumnName]],
-                // relationName: `${ referencedTableName }_${ randomString } `
                 relationName: referencedTableName
             })
         }
@@ -385,7 +416,7 @@ export default class Mysql implements AdapterInterface {
      * @return {*} 
      * @memberof Mysql
      */
-    buildManyRelation(tableName: string, manyForeignKeys, many: CallableFunction) {
+    buildManyRelation(manyForeignKeys, many: CallableFunction) {
         const relations = {};
 
         for (const foreignKey of Object.values(manyForeignKeys)) {
@@ -396,15 +427,7 @@ export default class Mysql implements AdapterInterface {
             const pluralizedName = pluralize(TableName).trim();
 
             const relatedTable = this.getExistingTable(TableName);
-            const randomString = (Math.random() + 1).toString(36).substring(7);
-
-            // // Test with a fixed relation name
-            const fixedRelationName = `${TableName}_relation_${randomString} `;
-            if (relatedTable !== undefined) {
-                relations[pluralizedName] = many(relatedTable, {
-                    relationName: TableName,
-                });
-            }
+            relations[pluralizedName] = many(relatedTable);
         }
 
         return relations;
