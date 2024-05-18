@@ -9,12 +9,12 @@ export class Adapter {
 	private adapter: Mysql;
 
 	private availableAdapter = {
-		mysql: (connection: AdapterConnection) => {
-			return new Mysql(connection);
+		mysql: (connection: AdapterConnection, debugMode = false) => {
+			return new Mysql(connection, debugMode);
 		},
 	};
 
-	constructor(connectionArgs: AdapterConnection) {
+	constructor(connectionArgs: AdapterConnection, debugMode = false) {
 		this.validateConnectionArgs(connectionArgs);
 
 		if (!Object.keys(this.availableAdapter).includes(connectionArgs.dbType)) {
@@ -25,7 +25,7 @@ export class Adapter {
 
 		this.connectionParams = connectionArgs;
 		this.databaseAdapter = this.availableAdapter[connectionArgs.dbType];
-		this.adapter = this.databaseAdapter(this.connectionParams);
+		this.adapter = this.databaseAdapter(this.connectionParams, debugMode);
 	}
 
 	/**

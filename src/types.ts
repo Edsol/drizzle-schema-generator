@@ -13,13 +13,27 @@ export type TableInfo = {
     REFERENCED_TABLE_SCHEMA: string,
 }
 
+// 'PRI' primary key
+// 'UNI' unique key
+// "MUL" multiple
 export type TableColumn = {
-    Field: string,
-    Type: string,
-    Null: string,
-    Key: "PI" | "UNI" | "MUL",
-    Default?: string,
-    Extra: string,
+    // Field: string,
+    // Type: string,
+    // Null: "NO" | "YES",
+    // Key: "PRI" | "UNI" | "MUL",
+    // Default?: string,
+    // Extra: string,
+
+    name: string,
+    type: string,
+    column_default: unknown,
+    column_key: "PRI" | "UNI" | "MUL",
+    nullable: "NO" | "YES",
+    char_length: number,
+    num_precision: number,
+    datetime_precision: unknown,
+    extra: string,
+    comment: string,
 }
 
 export type AdapterConnection = {

@@ -1,16 +1,16 @@
 import { MySqlTable } from "drizzle-orm/mysql-core";
-import { TableInfo } from "../types";
+import { TableColumn, TableInfo } from "../types";
 
 export interface AdapterInterface {
 
-    connection();
-    getConnection();
-    extractSchema(tableName?: string);
-    getTableList();
-    getPrimaryKeys(tableName: string): Promise<TableInfo[]>;
-    getForeignKeys(tableName: string): Promise<TableInfo[]>;
-    getTableColumns(tableName: string): Promise<QueryResult>;
-    buildTableRelations(tableName: string);
-    buildTableSchema(tableName: string): Promise<MySqlTable>;
-    setColumnParams(column, drizzleColumn);
+    // connection();
+    // getConnection();
+    // extractSchema();
+    // getTableList();
+    // getPrimaryKeys(tableName: string): Promise<TableInfo[]>;
+    // getForeignKeys(tableName: string): Promise<TableInfo[]>;
+    // getTableColumns(tableName: string): Promise<TableColumn[]>;
+    // buildTableSchema(tableList: string[]): Promise<void>;
+    // buildTableRelations(tableList: string[]);
+    // setColumnParams(column: TableColumn, drizzleColumn, tableName: string);
 }
