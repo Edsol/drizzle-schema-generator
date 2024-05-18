@@ -38,6 +38,10 @@ or get connection:
 adapter.getConnection();
 ```
 
+## Roadmap
+
+[ ] Extend to other databases (postreSQL, SQLite)
+
 ## Use case
 
 Extract schema from existing database to start Graphql server (like Apollo) using [drizzle-graphql](https://github.com/drizzle-team/drizzle-graphql) plugin:
