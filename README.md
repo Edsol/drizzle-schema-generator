@@ -41,6 +41,7 @@ adapter.getConnection();
 ## Roadmap
 
 [ ] Extend to other databases (postreSQL, SQLite)
+[ ] Optimize performances
 
 ## Use case
 

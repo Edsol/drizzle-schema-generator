@@ -70,6 +70,7 @@ export type TableColumn = {
     datetime_precision: unknown,
     extra: string,
     comment: string,
+    table_name: string
 }
 
 export type AdapterConnection = {

@@ -20,7 +20,7 @@ export default class Mysql implements AdapterInterface {
     connection: Connection;
     databaseName?: string;
     db: MySql2Database;
-    tableNameList: string[];
+    tableNameList: string[] = [];
     schema: mysqlCore.MySqlSchema;
 
     protected connectionParams: AdapterConnection;
@@ -54,42 +54,90 @@ export default class Mysql implements AdapterInterface {
     getConnection() {
         return this.connection;
     }
+
     /**
      *
      *
+     * @param {string} [databaseName]
      * @return {*} 
      * @memberof Mysql
      */
-    async extractSchema() {
+    async extractSchema(databaseName?: string, toBeExcluded?: Array<string>) {
         await this.connect();
 
-        this.schema = mysqlCore.mysqlDatabase(this.databaseName ?? 'schema');
+        this.schema = mysqlCore.mysqlDatabase(databaseName ?? this.databaseName ?? 'schema');
+        const exluded = await this.getPmaTables();
+        exluded.concat(toBeExcluded);
 
-        await this.getTableList();
-        await this.buildTables(this.tableNameList);
-        await this.buildTableRelations(this.tableNameList);
+        if (this.debugMode) {
+            console.time("extractSchema");
+        }
 
+        await this.buildTables(exluded);
+        await this.buildTableRelations();
+        if (this.debugMode) {
+            console.timeEnd('extractSchema');
+        }
         return this.schema;
+    }
+
+
+    /**
+     *get phpmyadmin table list
+     *
+     * @private
+     * @return {*} 
+     * @memberof Mysql
+     */
+    private async getPmaTables() {
+        const query = sql`
+        SELECT
+            TABLE_NAME 
+        FROM
+        INFORMATION_SCHEMA.TABLES 
+        WHERE 
+            TABLE_SCHEMA LIKE ${this.databaseName} 
+            AND TABLE_NAME LIKE '%pma__%'
+        `;
+        const [results, aa] = await this.db.execute(query);
+        const result = [];
+
+        for (const table of Object.values(results)) {
+            result.push(table['TABLE_NAME']);
+        }
+        return result;
     }
     /**
      *
      *
+     * @param {Array<string>} [toBeExcluded]
      * @return {*} 
      * @memberof Mysql
      */
-    async getTableList() {
-        const [tables] = await this.connection.query("SHOW TABLES");
-        const result: Array<string> = [];
-
-        // NOTE: refactoring
-        for (const table of Object.values(tables)) {
-            const name = table[`Tables_in_${this.databaseName}`];
-            if (!name.startsWith('pma__')) {
-                result.push(name);
-            }
-        }
-
-        this.tableNameList = result;
+    async getAllTableColumns(toBeExcluded?: Array<string>) {
+        const tables = toBeExcluded?.map((table) => `'${table}'`);
+        const query = `
+        SELECT 
+            COLUMN_NAME as name, 
+            DATA_TYPE as type,
+            COLUMN_DEFAULT as column_default,
+            COLUMN_KEY as column_key,
+            IS_NULLABLE as nullable,
+            CHARACTER_MAXIMUM_LENGTH as char_length,
+            NUMERIC_PRECISION as num_precision,
+            DATETIME_PRECISION as datetime_precision,
+            EXTRA as extra,
+            COLUMN_COMMENT as comment,
+            TABLE_NAME as table_name
+        FROM
+            INFORMATION_SCHEMA.COLUMNS
+        WHERE 
+            TABLE_SCHEMA = 'nolobi'
+            ${tables === undefined ? '' : `AND TABLE_NAME NOT IN (${tables})`}
+        ORDER BY TABLE_NAME ASC;
+    `;
+        const [results] = await this.connection.query(query);
+        return results;
     }
 
     /**
@@ -101,22 +149,25 @@ export default class Mysql implements AdapterInterface {
      */
     async getTableColumns(tableName: string): Promise<TableColumn[]> {
         const query = sql`
-        SELECT 
-            COLUMN_NAME as name, 
-            DATA_TYPE as type,
-            COLUMN_DEFAULT as column_default,
-            COLUMN_KEY as column_key,
-            IS_NULLABLE as nullable,
-            CHARACTER_MAXIMUM_LENGTH as char_length,
-            NUMERIC_PRECISION as num_precision,
-            DATETIME_PRECISION as datetime_precision,
-            EXTRA as extra,
-            COLUMN_COMMENT as comment
-        FROM INFORMATION_SCHEMA.COLUMNS
-        WHERE TABLE_SCHEMA = ${this.databaseName}
-        AND TABLE_NAME = ${tableName}
-        ORDER BY ORDINAL_POSITION;
-    `;
+            SELECT 
+                COLUMN_NAME as name, 
+                DATA_TYPE as type,
+                COLUMN_DEFAULT as column_default,
+                COLUMN_KEY as column_key,
+                IS_NULLABLE as nullable,
+                CHARACTER_MAXIMUM_LENGTH as char_length,
+                NUMERIC_PRECISION as num_precision,
+                DATETIME_PRECISION as datetime_precision,
+                EXTRA as extra,
+                COLUMN_COMMENT as comment,
+                TABLE_NAME as table_name
+            FROM
+                INFORMATION_SCHEMA.COLUMNS
+            WHERE 
+                TABLE_SCHEMA = ${this.databaseName}
+                AND TABLE_NAME = ${tableName}
+            ORDER BY ORDINAL_POSITION;
+        `;
 
         const [results] = await this.db.execute(query);
         return results;
@@ -132,7 +183,8 @@ export default class Mysql implements AdapterInterface {
     async getPrimaryKeys(tableName: string): Promise<TableInfo[]> {
         const query = sql`
             SELECT * 
-                FROM information_schema.KEY_COLUMN_USAGE 
+            FROM
+                information_schema.KEY_COLUMN_USAGE 
             WHERE 
                 TABLE_SCHEMA = ${this.databaseName} AND 
                 TABLE_NAME = ${tableName} AND 
@@ -157,16 +209,16 @@ export default class Mysql implements AdapterInterface {
         SELECT * 
         FROM
             INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu
-        INNER JOIN information_schema.referential_constraints AS rc
+            INNER JOIN information_schema.referential_constraints AS rc
         ON (
             kcu.CONSTRAINT_NAME = rc.CONSTRAINT_NAME
             AND kcu.CONSTRAINT_SCHEMA = rc.CONSTRAINT_SCHEMA
         )
         WHERE
-        kcu.TABLE_SCHEMA = ${this.databaseName}
-        AND kcu.TABLE_NAME = ${tableName}
-        AND rc.TABLE_NAME = ${tableName};
-    `;
+            kcu.TABLE_SCHEMA = ${this.databaseName}
+            AND kcu.TABLE_NAME = ${tableName}
+            AND rc.TABLE_NAME = ${tableName};
+        `;
 
         const [results]: MySqlQueryResult = await this.db.execute(query);
 
@@ -183,27 +235,84 @@ export default class Mysql implements AdapterInterface {
      * @return {*}  {Promise<Array<TableInfo>>}
      * @memberof MySql
      */
+    async getAllForeignKeys(): Promise<ForeignKey[]> {
+        const query = sql`
+        SELECT
+            CONSTRAINT_NAME as name,
+            TABLE_NAME as table_name,
+            COLUMN_NAME as column_name,
+            REFERENCED_TABLE_NAME as referenced_table_name,
+            REFERENCED_COLUMN_NAME as referenced_column_name
+        FROM
+            INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+        WHERE
+            TABLE_SCHEMA = ${this.databaseName}
+            AND REFERENCED_TABLE_NAME IS NOT NULL
+        ORDER BY TABLE_NAME ASC;
+        `;
+
+        const [results]: MySqlQueryResult = await this.db.execute(query);
+        return results;
+    }
+    /**
+     *
+     *
+     * @param {string} tableName
+     * @return {*}  {Promise<Array<TableInfo>>}
+     * @memberof MySql
+     */
     async getForeignKeys(tableName: string): Promise<ForeignKey[]> {
         const query = sql`
-                SELECT
-                    CONSTRAINT_NAME as name,
-                    TABLE_NAME as table_name,
-                    COLUMN_NAME as column_name,
-                    REFERENCED_TABLE_NAME as referenced_table_name,
-                    REFERENCED_COLUMN_NAME as referenced_column_name
-                FROM
-                    INFORMATION_SCHEMA.KEY_COLUMN_USAGE
-                WHERE
-                TABLE_SCHEMA = ${this.databaseName}
-                AND TABLE_NAME = ${tableName}
-                AND REFERENCED_TABLE_NAME IS NOT NULL;
-            `;
+        SELECT
+            CONSTRAINT_NAME as name,
+            TABLE_NAME as table_name,
+            COLUMN_NAME as column_name,
+            REFERENCED_TABLE_NAME as referenced_table_name,
+            REFERENCED_COLUMN_NAME as referenced_column_name
+        FROM
+            INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+        WHERE
+            TABLE_SCHEMA = ${this.databaseName}
+            AND TABLE_NAME = ${tableName}
+            AND REFERENCED_TABLE_NAME IS NOT NULL;
+        `;
 
         const [results]: MySqlQueryResult = await this.db.execute(query);
 
         if (results.length === 0) {
             return [];
         }
+
+        return results;
+    }
+
+
+    /**
+     * one to many 
+     *
+     * @param {string} tableName
+     * @param {string} keyName
+     * @return {*} 
+     * @memberof Mysql
+     */
+    async getAllForeignKeyOf(): Promise<ForeignKey[]> {
+        const query = sql`
+        SELECT
+            CONSTRAINT_NAME as name,
+            TABLE_NAME as table_name,
+            COLUMN_NAME as column_name,
+            REFERENCED_TABLE_NAME as referenced_table_name,
+            REFERENCED_COLUMN_NAME as referenced_column_name
+        FROM 
+            INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+        WHERE 
+            TABLE_SCHEMA = ${this.databaseName} 
+            AND CONSTRAINT_NAME <> "PRIMARY" 
+            AND REFERENCED_TABLE_NAME IS NOT NULL
+        ORDER BY REFERENCED_TABLE_NAME ASC;
+        `;
+
+        const [results] = await this.db.execute(query);
 
         return results;
     }
@@ -223,13 +332,14 @@ export default class Mysql implements AdapterInterface {
             COLUMN_NAME as column_name,
             REFERENCED_TABLE_NAME as referenced_table_name,
             REFERENCED_COLUMN_NAME as referenced_column_name
-        FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
-            WHERE 
-                TABLE_SCHEMA = ${this.databaseName} 
-                AND REFERENCED_TABLE_NAME = ${tableName} 
-                AND CONSTRAINT_NAME <> "PRIMARY" 
-                AND REFERENCED_TABLE_NAME IS NOT NULL;
-            `;
+        FROM 
+            INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+        WHERE 
+            TABLE_SCHEMA = ${this.databaseName} 
+            AND REFERENCED_TABLE_NAME = ${tableName} 
+            AND CONSTRAINT_NAME <> "PRIMARY" 
+            AND REFERENCED_TABLE_NAME IS NOT NULL;
+        `;
 
         const [results] = await this.db.execute(query);
 
@@ -265,27 +375,39 @@ export default class Mysql implements AdapterInterface {
      * @return {} 
      * @memberof MySql
      */
-    async buildTables(tableList: string[]) {
-        const tables = {};
+    async buildTables(toBeExcluded?: Array<string>) {
+        const allColumnsList: TableColumn[] = await this.getAllTableColumns(toBeExcluded);
 
-        for (const tableName of tableList) {
-            this.schema[tableName] = await this.buildTable(tableName);
+        let columns: TableColumn[] = [];
+        for (let i = 0; i < allColumnsList.length; i++) {
+            const nextIndex = i + 1;
+
+            if (nextIndex < allColumnsList.length) {
+                const column = allColumnsList[i];
+                const nextColumn = allColumnsList[nextIndex];
+
+                const currentTableName = column.table_name;
+
+                if (currentTableName === nextColumn.table_name) {
+                    columns.push(column);
+                } else {
+                    this.tableNameList.push(currentTableName);
+                    await this.prepareTable(currentTableName, columns);
+                    columns = [];
+                }
+            }
         }
-
-        return tables;
     }
     /**
      *
      *
      * @private
      * @param {string} tableName
-     * @return {*} 
+     * @param {TableColumn[]} columns
      * @memberof Mysql
      */
-    private async buildTable(tableName: string) {
+    private async prepareTable(tableName: string, columns: TableColumn[]) {
         const tableColumns = {};
-
-        const columns: TableColumn[] = await this.getTableColumns(tableName);
         for (const column of columns) {
             if (mysqlCore[column.type]) {
                 if (column.type === 'varchar') {
@@ -301,12 +423,9 @@ export default class Mysql implements AdapterInterface {
 
             const foreignKey = await this.getForeignKey(tableName, column.name);
 
-            const columnWithMeta = this.setColumnParams(column, tableColumns[column.name], tableName, foreignKey);
-
-            tableColumns[column.name] = columnWithMeta;
+            tableColumns[column.name] = await this.setColumnParams(column, tableColumns[column.name], tableName, foreignKey);
         }
-
-        return this.schema.table(tableName, tableColumns);
+        this.schema[tableName] = this.schema.table(tableName, tableColumns);
     }
 
     /**
@@ -319,10 +438,12 @@ export default class Mysql implements AdapterInterface {
      * @return {*} 
      * @memberof Mysql
      */
-    private setColumnParams(column: TableColumn, tableColumn: ColumnBuilder, tableName: string, foreignKey?: TableInfo) {
+    private async setColumnParams(column: TableColumn, tableColumn: ColumnBuilder, tableName: string, foreignKey?: TableInfo) {
+
         switch (column.column_key) {
             case "PRI":
                 tableColumn.autoincrement().primaryKey();
+                // tableColumn.primaryKey();
                 break;
             case "PI":
                 break;
@@ -342,24 +463,20 @@ export default class Mysql implements AdapterInterface {
             tableColumn.notNull();
         }
 
-        if (column.column_default !== undefined) {
+        if (column.column_default !== undefined && column.column_default !== '') {
             tableColumn.default(column.column_default);
         }
-
         return tableColumn;
     }
 
     /**
      *
      *
-     * @param {string} tableName
-     * @param {MySqlSchema} schema
-     * @return {*} 
-     * @memberof MySql
-    */
-    async buildTableRelations(tableList: string[]) {
-
-        for (const tableName of tableList) {
+     * @param {string[]} tableList
+     * @memberof Mysql
+     */
+    async buildTableRelations() {
+        for (const tableName of this.tableNameList) {
             const relationTable = this.getExistingTable(tableName);
 
             if (relationTable === undefined) {
@@ -390,7 +507,7 @@ export default class Mysql implements AdapterInterface {
      * @return {*} 
      * @memberof Mysql
      */
-    buildOneRelation(tableName: string, foreignKeys: ForeignKey[], one: CallableFunction) {
+    private buildOneRelation(tableName: string, foreignKeys: ForeignKey[], one: CallableFunction) {
         const relationTable = this.getExistingTable(tableName);
         const relations = {};
 
@@ -406,21 +523,17 @@ export default class Mysql implements AdapterInterface {
             const referencedColumnName = foreignKey.referenced_column_name;
 
             const referencedTable = this.getExistingTable(referencedTableName);
-            const relationName = this.hash(tableName, columnName);
+            const relationName = `${tableName}_${columnName}`;
 
             // skip if referencedTable not exists
-            if (referencedTable && relationTable) {
+            if (referencedTable[referencedColumnName] && relationTable && relationTable[columnName]) {
                 relations[`_${fieldName}`] = one(referencedTable, {
                     fields: [relationTable[columnName]],
                     references: [referencedTable[referencedColumnName]],
                     relationName: relationName
                 })
             }
-
-
         }
-
-
         return relations;
     }
 
@@ -435,7 +548,7 @@ export default class Mysql implements AdapterInterface {
      * @return {*} 
      * @memberof Mysql
      */
-    buildManyRelation(tableName: string, manyForeignKeys: ForeignKey[], many: CallableFunction) {
+    private buildManyRelation(tableName: string, manyForeignKeys: ForeignKey[], many: CallableFunction) {
         const relations = {};
 
         for (const foreignKey of manyForeignKeys) {
@@ -446,7 +559,7 @@ export default class Mysql implements AdapterInterface {
             const relatedTable = this.getExistingTable(TableName);
 
             const pluralizedName = pluralize(TableName).trim();
-            const relationName = this.hash(TableName, columnName);
+            const relationName = `${TableName}_${columnName}`;
 
             if (relatedTable && this.tableExists(TableName)) {
                 relations[pluralizedName] = many(relatedTable, {
@@ -457,11 +570,5 @@ export default class Mysql implements AdapterInterface {
 
         }
         return relations;
-    }
-
-    hash(input1: string, input2: string): string {
-        const inputString = input1 + input2;
-        const hash = crypto.createHash('sha256').update(inputString).digest('hex');
-        return hash;
     }
 }
