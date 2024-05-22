@@ -8,11 +8,6 @@ import { drizzle } from "drizzle-orm/mysql2";
 import { TableColumn, AdapterConnection, TableInfo, ForeignKey } from "../types";
 import { AdapterInterface } from "./adapterInterface";
 const pluralize = require('pluralize');
-import crypto from 'crypto';
-
-import fs from 'fs';
-import { encycle, decycle } from "json-cyclic"
-const util = require('util')
 
 export default class Mysql implements AdapterInterface {
 

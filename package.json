@@ -15,7 +15,6 @@
   "dependencies": {
     "drizzle-orm": "^0.30.10",
     "graphql": "^16.8.1",
-    "json-cyclic": "^1.0.2",
     "mysql": "^2.18.1",
     "mysql2": "^3.9.7",
     "pluralize": "^8.0.0",
