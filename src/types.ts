@@ -49,21 +49,15 @@ export type ForeignKey = {
     referenced_column_name: string
 }
 
-// 'PRI' primary key
-// 'UNI' unique key
-// "MUL" multiple
-export type TableColumn = {
-    // Field: string,
-    // Type: string,
-    // Null: "NO" | "YES",
-    // Key: "PRI" | "UNI" | "MUL",
-    // Default?: string,
-    // Extra: string,
 
+export type TableColumn = {
     name: string,
     type: string,
     column_default: unknown,
     column_key: "PRI" | "UNI" | "MUL",
+    // 'PRI' primary key
+    // 'UNI' unique key
+    // "MUL" multiple
     nullable: "NO" | "YES",
     char_length: number,
     num_precision: number,
