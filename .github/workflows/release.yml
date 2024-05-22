@@ -1,2 +1,0 @@
-- name: Release GitHub Actions
-  uses: technote-space/release-github-actions@v8.0.3
