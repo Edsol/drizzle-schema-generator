@@ -12,6 +12,8 @@ export class Adapter {
 		mysql: (connection: AdapterConnection, debugMode = false) => {
 			return new Mysql(connection, debugMode);
 		},
+		// postgres: undefined,
+		// sqlite: undefined
 	};
 
 	constructor(connectionArgs: AdapterConnection, debugMode = false) {
