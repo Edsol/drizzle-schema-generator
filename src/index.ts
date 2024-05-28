@@ -1,18 +1,21 @@
 import Mysql from "./adapters/mysql";
-import { AdapterConnection } from "./types";
-export * from './types';
+import Postgres from "./adapters/postgres";
+import { AdapterConnection } from "drizzle-schema-generator/src/types/mysqlTypes";
+export * from 'drizzle-schema-generator/src/types/mysqlTypes';
 
 export class Adapter {
 
 	private databaseAdapter;
 	private connectionParams: AdapterConnection;
-	private adapter: Mysql;
+	private adapter: Mysql | Postgres;
 
 	private availableAdapter = {
 		mysql: (connection: AdapterConnection, debugMode = false) => {
 			return new Mysql(connection, debugMode);
 		},
-		// postgres: undefined,
+		postgres: (connection: AdapterConnection, debugMode = false) => {
+			return new Postgres(connection, debugMode);
+		},
 		// sqlite: undefined
 	};
 

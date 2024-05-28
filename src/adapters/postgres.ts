@@ -1,19 +1,24 @@
-import { Connection, QueryResult } from "mysql2/promise";
-import mysql from "mysql2/promise";
-import { MySql2Database, MySqlQueryResult } from "drizzle-orm/mysql2";
-import { sql, relations, ColumnBuilder, Many, One } from "drizzle-orm";
-import * as mysqlCore from "drizzle-orm/mysql-core";
-import { drizzle } from "drizzle-orm/mysql2";
+// import { Connection, QueryResult } from "mysql2/promise";
+// import mysql from "mysql2/promise";
+// import { MySql2Database, MySqlQueryResult } from "drizzle-orm/mysql2";
+// import { sql, relations, ColumnBuilder, Table, Many, createMany, One } from "drizzle-orm";
+import { PgDatabase } from "drizzle-orm/pg-core";
+import { drizzle } from "drizzle-orm/postgres-js";
+import { Client } from "pg";
+import postgres from 'postgres';
+import * as pgCore from "drizzle-orm/pg-core";
+import { relations, ColumnBuilder, Many, One } from "drizzle-orm";
 
-import { TableColumn, AdapterConnection, TableInfo, ForeignKey } from "../types/mysqlTypes";
+import { AdapterConnection, TableColumn, ForeignKey } from "../types/postgresTypes";
 import { AdapterInterface } from "./adapterInterface";
 const pluralize = require('pluralize');
 
-export default class Mysql implements AdapterInterface {
+export default class Postgres implements AdapterInterface {
 
     protected debugMode = false;
-    connection: Connection;
+    connection: postgres;
     databaseName?: string;
+    dbSchema?: string;
     db: MySql2Database;
     tableNameList: string[] = [];
     schema: mysqlCore.MySqlSchema;
@@ -30,98 +35,78 @@ export default class Mysql implements AdapterInterface {
     }
 
     async connect() {
-        this.connection = await mysql.createConnection({
+        const connectionString = `postgres://${this.connectionParams.user}:${this.connectionParams.password}@${this.connectionParams.host}:${this.connectionParams.port}/${this.connectionParams.database}`;
+
+        if (this.debugMode) {
+            console.log({ connectionString });
+        }
+        this.connection = postgres('', {
             host: this.connectionParams.host,
-            user: this.connectionParams.user,
-            password: this.connectionParams.password,
+            port: this.connectionParams.port,
             database: this.connectionParams.database,
+            username: this.connectionParams.user,
+            password: this.connectionParams.password
         });
 
         this.db = drizzle(this.connection);
-        this.databaseName = this.connection.config.database;
+        this.databaseName = this.connectionParams.database;
+        this.dbSchema = this.connectionParams.schema;
     }
     /**
      *
      *
      * @return {*} 
-     * @memberof Mysql
+     * @memberof Postgres
      */
     getConnection() {
         return this.connection;
     }
 
     /**
-     *
-     *
-     * @param {string} [databaseName]
-     * @return {*} 
-     * @memberof Mysql
-     */
+ *
+ *
+ * @param {string} [databaseName]
+ * @return {*} 
+ * @memberof Postgres
+ */
     async extractSchema(databaseName?: string, toBeExcluded?: Array<string>) {
         await this.connect();
 
-        this.schema = mysqlCore.mysqlDatabase(databaseName ?? this.databaseName ?? 'schema');
-        const exluded = await this.getPmaTables();
-        exluded.concat(toBeExcluded);
+        this.schema = new pgCore.PgSchema(databaseName ?? this.dbSchema ?? 'schema');
+        const excluded: Array<String> = [];
+        excluded.concat(toBeExcluded);
 
         if (this.debugMode) console.time("extractSchema");
 
-        await this.buildTables(exluded);
+        await this.buildTables(excluded);
         await this.buildTableRelations();
 
         if (this.debugMode) console.timeEnd('extractSchema');
         return this.schema;
     }
 
-
-    /**
-     *get phpmyadmin table list
-     *
-     * @private
-     * @return {*} 
-     * @memberof Mysql
-     */
-    private async getPmaTables() {
-        const query = sql`
-        SELECT
-            TABLE_NAME 
-        FROM
-        INFORMATION_SCHEMA.TABLES 
-        WHERE 
-            TABLE_SCHEMA LIKE ${this.databaseName} 
-            AND TABLE_NAME LIKE '%pma__%'
-        `;
-        const [results] = await this.db.execute(query);
-        const result = [];
-
-        for (const table of Object.values(results)) {
-            result.push(table['TABLE_NAME']);
-        }
-        return result;
-    }
     /**
      *
      *
      * @param {Array<string>} [toBeExcluded]
      * @return {*} 
-     * @memberof Mysql
+     * @memberof Postgres
      */
-    async getAllTableColumns(toBeExcluded?: Array<string>) {
+    async getAllTableColumns(toBeExcluded?: Array<string>): Promise<TableColumn[]> {
         if (this.debugMode) console.time("getAllTableColumns")
-
         const tables = toBeExcluded?.map((table) => `'${table}'`);
 
-        const query = `
+        // TODO: exclude tables
+        const results = await this.connection`
             SELECT c.*, tc.constraint_type
             FROM information_schema.columns c
             JOIN information_schema.table_constraints tc
                 ON c.table_name = tc.table_name
             WHERE
-                c.table_schema = '${this.databaseName}'
-            
+                c.table_schema = ${this.dbSchema}
+               
             ORDER BY c.table_name ASC, ordinal_position ASC;
         `;
-        const [results] = await this.connection.query(query);
 
         if (this.debugMode) console.timeEnd('getAllTableColumns');
         return results;
@@ -135,68 +120,81 @@ export default class Mysql implements AdapterInterface {
      * @memberof MySql
      */
     async getForeignKeys(tableName: string): Promise<ForeignKey[]> {
-        const query = sql`
+
+        const results = await this.connection`
             SELECT
-                CONSTRAINT_NAME as name,
-                TABLE_NAME as table_name,
-                COLUMN_NAME as column_name,
-                REFERENCED_TABLE_NAME as referenced_table_name,
-                REFERENCED_COLUMN_NAME as referenced_column_name
+                conrelid::regclass AS table_name,
+                a.attname AS column_name,
+                confrelid::regclass AS foreign_table_name,
+                af.attname AS foreign_column_name
             FROM
-                INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+                pg_constraint AS c
+            JOIN
+                pg_class AS cl
+                ON c.conrelid = cl.oid
+            JOIN
+                pg_attribute AS a
+                ON a.attnum = ANY(c.conkey) AND a.attrelid = cl.oid
+            JOIN
+                pg_class AS clf
+                ON c.confrelid = clf.oid
+            JOIN
+                pg_attribute AS af
+                ON af.attnum = ANY(c.confkey) AND af.attrelid = clf.oid
             WHERE
-                TABLE_SCHEMA = ${this.databaseName}
-                AND TABLE_NAME = ${tableName}
-                AND referenced_table_name IS NOT NULL;
-        `;
-
-        const [results]: MySqlQueryResult = await this.db.execute(query);
-
-        if (results.length === 0) {
-            return [];
-        }
-
+                c.contype = 'f'
+                AND cl.relnamespace = ${this.dbSchema}::regnamespace
+                AND cl.relname = ${tableName};
+            `;
         return results;
     }
-
     /**
-     * one to many 
+     *
      *
      * @param {string} tableName
      * @param {string} keyName
-     * @return {*} 
-     * @memberof Mysql
+     * @return {*}  {Promise<ForeignKey[]>}
+     * @memberof Postgres
      */
-    async getForeignKeyOf(tableName: string, keyName: string): Promise<ForeignKey[]> {
-        const query = sql`
-        SELECT
-            CONSTRAINT_NAME as name,
-            TABLE_NAME as table_name,
-            COLUMN_NAME as column_name,
-            REFERENCED_TABLE_NAME as referenced_table_name,
-            REFERENCED_COLUMN_NAME as referenced_column_name
-        FROM 
-            INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
-        WHERE 
-            TABLE_SCHEMA = ${this.databaseName} 
-            AND REFERENCED_TABLE_NAME = ${tableName} 
-            AND CONSTRAINT_NAME <> "PRIMARY" 
-            AND REFERENCED_TABLE_NAME IS NOT NULL;
+    async getForeignKeysOf(tableName: string, keyName: string): Promise<ForeignKey[]> {
+        const results = await this.connection`
+            SELECT
+                conname AS constraint_name,
+                conrelid::regclass AS table_name,
+                a.attname AS column_name,
+                confrelid::regclass AS foreign_table_name,
+                af.attname AS foreign_column_name
+            FROM
+                pg_constraint AS c
+            JOIN
+                pg_class AS cl
+                ON c.conrelid = cl.oid
+            JOIN
+                pg_attribute AS a
+                ON a.attnum = ANY(c.conkey) AND a.attrelid = cl.oid
+            JOIN
+                pg_class AS clf
+                ON c.confrelid = clf.oid
+            JOIN
+                pg_attribute AS af
+                ON af.attnum = ANY(c.confkey) AND af.attrelid = clf.oid
+            WHERE
+                c.contype = 'f'
+                AND clf.relnamespace = ${this.dbSchema}::regnamespace
+                AND clf.relname = ${tableName};    
         `;
-
-        const [results] = await this.db.execute(query);
-
         return results;
     }
+
     /**
-     *
-     *
-     * @private
-     * @param {string} tableName
-     * @return {*}  {MySqlTable}
-     * @memberof Mysql
-     */
-    private getExistingTable(tableName: string): mysqlCore.AnyMySqlTable {
+ *
+ *
+ * @private
+ * @param {string} tableName
+ * @return {*}  {MySqlTable}
+ * @memberof Postgres
+ */
+    private getExistingTable(tableName: string): pgCore.AnyPgTable {
         return this.schema[tableName];
     }
     /**
@@ -205,7 +203,7 @@ export default class Mysql implements AdapterInterface {
      * @private
      * @param {string} tableName
      * @return {boolean} 
-     * @memberof Mysql
+     * @memberof Postgres
      */
     private tableExists(tableName: string): boolean {
         return this.getExistingTable(tableName) !== undefined;
@@ -214,9 +212,8 @@ export default class Mysql implements AdapterInterface {
     /**
      *
      *
-     * @param {string[]} tableList
-     * @return {} 
-     * @memberof MySql
+     * @param {Array<string>} [toBeExcluded]
+     * @memberof Postgres
      */
     async buildTables(toBeExcluded?: Array<string>) {
         const timeLabel = 'buildTables time';
@@ -230,13 +227,13 @@ export default class Mysql implements AdapterInterface {
             const column = allColumnsList[i];
             const nextColumn = allColumnsList[nextIndex];
 
-            const currentTableName = column.TABLE_NAME;
+            const currentTableName = column.table_name;
 
             columns.push(column);
 
             // TODO: REFACTORING
             if (nextIndex < allColumnsList.length) {
-                if (currentTableName !== nextColumn.TABLE_NAME) {
+                if (currentTableName !== nextColumn.table_name) {
                     this.tableNameList.push(currentTableName);
                     await this.prepareTable(currentTableName, columns);
                     columns = [];
@@ -255,42 +252,43 @@ export default class Mysql implements AdapterInterface {
      * @private
      * @param {string} tableName
      * @param {TableColumn[]} columns
-     * @memberof Mysql
+     * @memberof Postgres
      */
     private async prepareTable(tableName: string, columns: TableColumn[]) {
         const tableColumns = {};
-
         for (const column of columns) {
-            const columnName = column.COLUMN_NAME;
+            const columnName = column.column_name;
 
-            if (mysqlCore[column.type]) {
-                if (column.type === 'varchar') {
-                    tableColumns[columnName] = mysqlCore[column.type](columnName, column.CHARACTER_MAXIMUM_LENGTH);
+            if (pgCore[column.data_type]) {
+                if (column.data_type === 'varchar') {
+                    tableColumns[columnName] = pgCore[column.data_type](columnName, column.character_maximum_length);
                 } else if (column.type === 'bigint') {
-                    tableColumns[columnName] = mysqlCore[column.type](columnName, column.NUMERIC_PRECISION);
+                    tableColumns[columnName] = pgCore[column.data_type](columnName, column.numeric_precision);
                 } else {
-                    tableColumns[columnName] = mysqlCore[column.type](columnName);
+                    tableColumns[columnName] = pgCore[column.data_type](columnName);
                 }
             } else {
-                tableColumns[columnName] = mysqlCore.text(columnName);
+                tableColumns[columnName] = pgCore.text(columnName);
             }
 
             tableColumns[columnName] = await this.setColumnParams(column, tableColumns[columnName], tableName);
         }
+
         this.schema[tableName] = this.schema.table(tableName, tableColumns);
     }
-
     /**
      *
      *
      * @private
      * @param {TableColumn} column
-     * @param {ColumnBuilder} tableColumns
+     * @param {ColumnBuilder} tableColumn
      * @param {string} tableName
+     * @param {TableInfo} [foreignKey]
      * @return {*} 
-     * @memberof Mysql
+     * @memberof Postgres
      */
-    private async setColumnParams(column: TableColumn, tableColumn: ColumnBuilder, tableName: string, foreignKey?: TableInfo) {
+    private async setColumnParams(column: TableColumn, tableColumn: ColumnBuilder, tableName: string) {
+
         switch (column.constraint_type) {
             case "PRIMARY KEY":
                 tableColumn.primaryKey();
@@ -312,11 +310,11 @@ export default class Mysql implements AdapterInterface {
     }
 
     /**
-     *
-     *
-     * @param {string[]} tableList
-     * @memberof Mysql
-     */
+ *
+ *
+ * @param {string[]} tableList
+ * @memberof Mysql
+ */
     async buildTableRelations() {
         const timeLabel = 'buildTableRelations';
         if (this.debugMode) console.time(timeLabel)
@@ -329,7 +327,7 @@ export default class Mysql implements AdapterInterface {
             }
 
             const foreignKeys = await this.getForeignKeys(tableName);
-            const manyForeignKeys = await this.getForeignKeyOf(tableName, "id");
+            const manyForeignKeys = await this.getForeignKeysOf(tableName, "id");
 
             const oneRelations = await this.buildOneRelation(tableName, foreignKeys);
             const manyRelations = await this.buildManyRelation(tableName, manyForeignKeys);
@@ -348,36 +346,40 @@ export default class Mysql implements AdapterInterface {
     }
 
     /**
-     *
-     *
-     * @param {string} tableName
-     * @param {*} foreignKeys
-     * @param {CallableFunction} one
-     * @return {*} 
-     * @memberof Mysql
-     */
+ *
+ *
+ * @param {string} tableName
+ * @param {*} foreignKeys
+ * @param {CallableFunction} one
+ * @return {*} 
+ * @memberof Mysql
+ */
     private async buildOneRelation(tableName: string, foreignKeys: ForeignKey[]) {
         // current table
         const relationTable = this.getExistingTable(tableName);
         const relations = {};
 
         for (const foreignKey of foreignKeys) {
-            const columnName = foreignKey.column_name;
-            let fieldName = columnName;
+            const relationColumnName = foreignKey.column_name;
+            let fieldName = relationColumnName;
 
-            if (columnName.endsWith("_id")) {
-                fieldName = columnName.slice(0, -3);
+            if (relationColumnName.endsWith("_id")) {
+                fieldName = relationColumnName.slice(0, -3);
             }
+            // singularize relation name
+            fieldName = pluralize.singular(fieldName);
 
-            const referencedTableName = foreignKey.referenced_table_name;
-            const referencedColumnName = foreignKey.referenced_column_name;
+            const referencedTableName = foreignKey.foreign_table_name;
+            const referencedColumnName = foreignKey.foreign_column_name;
 
             const referencedTable = this.getExistingTable(referencedTableName);
-            const relationName = `${tableName}_${columnName}`;
+            const relationName = `${tableName}_${relationColumnName}`;
+
             // skip if referencedTable not exists
-            if (referencedTable[referencedColumnName] && relationTable && relationTable[columnName]) {
-                relations[`_${fieldName}`] = new One(relationTable, referencedTable, {
-                    fields: [relationTable[columnName]],
+            if (referencedTable[referencedColumnName] && relationTable[relationColumnName]) {
+                const r = (Math.random() + 1).toString(36).substring(7);
+                relations[`_${fieldName}_${r}`] = new One(relationTable, referencedTable, {
+                    fields: [relationTable[relationColumnName]],
                     references: [referencedTable[referencedColumnName]],
                     relationName: relationName
                 }, true);
@@ -405,7 +407,7 @@ export default class Mysql implements AdapterInterface {
             const TableName = foreignKey.table_name;
 
             const columnName = foreignKey.column_name;
-            const ReferencedTableName = foreignKey.referenced_table_name;
+            const ReferencedTableName = foreignKey.table_name;
             const relatedTable = this.getExistingTable(TableName);
 
             const pluralizedName = pluralize(TableName).trim();
@@ -416,9 +418,8 @@ export default class Mysql implements AdapterInterface {
                     relationName: relationName
                 });
             }
-
-
         }
         return relations;
     }
+
 }
