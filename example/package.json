@@ -4,8 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev:mysql": "bun --hot src/mysql.ts",
-    "dev:postgres": "bun --hot src/postgres.ts"
+    "local:mysql": "bun --hot local/mysql.ts",
+    "local:postgres": "bun --hot local/postgres.ts",
+    "auto:mysql": "bun --hot auto/mysql.ts",
+    "auto:postgres": "bun --hot auto/postgres.ts"
   },
   "author": "",
   "license": "ISC",
@@ -15,12 +17,9 @@
     "drizzle": "^1.4.0",
     "drizzle-graphql": "0.6",
     "drizzle-orm": "^0.30.10",
-    "drizzle-schema-generator": "^0.0.1",
     "graphql": "^16.8.1",
-    "graphql-depth-limit": "^1.1.0",
     "json-cyclic": "^1.0.2",
     "pg": "^8.11.5",
-    "postgres": "^3.4.4",
-    "sqlite3": "^5.1.7"
+    "postgres": "^3.4.4"
   }
 }

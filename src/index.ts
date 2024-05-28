@@ -1,6 +1,6 @@
 import Mysql from "./adapters/mysql";
 import Postgres from "./adapters/postgres";
-import { AdapterConnection } from "drizzle-schema-generator/src/types/mysqlTypes";
+import { AdapterConnection } from "drizzle-schema-generator/src/types/commonTypes";
 export * from 'drizzle-schema-generator/src/types/mysqlTypes';
 
 export class Adapter {

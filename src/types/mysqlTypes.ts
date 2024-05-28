@@ -66,12 +66,3 @@ export type TableColumn = {
     comment: string,
     table_name: string
 }
-
-export type AdapterConnection = {
-    dbType: string,
-    host: string,
-    port: number,
-    user: string,
-    password: string,
-    database: string,
-}

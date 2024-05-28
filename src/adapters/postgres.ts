@@ -9,7 +9,8 @@ import postgres from 'postgres';
 import * as pgCore from "drizzle-orm/pg-core";
 import { relations, ColumnBuilder, Many, One } from "drizzle-orm";
 
-import { AdapterConnection, TableColumn, ForeignKey } from "../types/postgresTypes";
+import { TableColumn, ForeignKey } from "../types/postgresTypes";
+import { AdapterConnection } from "drizzle-schema-generator/src/types/commonTypes";
 import { AdapterInterface } from "./adapterInterface";
 const pluralize = require('pluralize');
 

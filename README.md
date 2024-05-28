@@ -10,6 +10,16 @@ Automatically generate of Drizzle ORM schema from existing database
 npm install drizzle-schema-generator
 ```
 
+## Roadmap
+
+[x] Extend to PostgreSQL
+
+[x] Optimize performances
+
+[ ] Extend to SQLite ([coming soon](https://orm.drizzle.team/docs/schemas))
+
+[ ] Unify the logic of the adapter
+
 ## Usage
 
 import the Adapter and inizialize it with the connection information:
@@ -37,13 +47,6 @@ or get connection:
 ```typescript
 adapter.getConnection();
 ```
-
-## Roadmap
-
-[x] Extend to PostgreSQL
-[ ] Extend to SQLite ([coming soon](https://orm.drizzle.team/docs/schemas))
-
-[x] Optimize performances
 
 ## Use case
 
@@ -82,3 +85,7 @@ async function main() {
 
 main();
 ```
+
+## Examples
+
+More examples are available [here](./example/README.md)
