@@ -1,0 +1,4 @@
+import { int, text, mysqlSchema, primaryKey } from "drizzle-orm/mysql-core";
+import { relations } from 'drizzle-orm';
+
+export const mySchema = mysqlSchema("example")

@@ -1,0 +1,4 @@
+import { serial, text, pgSchema, primaryKey, numeric } from "drizzle-orm/pg-core";
+import { relations } from 'drizzle-orm';
+
+export const mySchema = pgSchema()

@@ -1,0 +1,26 @@
+{
+  "name": "drizzle-schema-generator-example",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev:mysql": "bun --hot src/mysql.ts",
+    "dev:postgres": "bun --hot src/postgres.ts"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@apollo/server": "^4.10.4",
+    "dotenv": "^16.4.5",
+    "drizzle": "^1.4.0",
+    "drizzle-graphql": "0.6",
+    "drizzle-orm": "^0.30.10",
+    "drizzle-schema-generator": "^0.0.1",
+    "graphql": "^16.8.1",
+    "graphql-depth-limit": "^1.1.0",
+    "json-cyclic": "^1.0.2",
+    "pg": "^8.11.5",
+    "postgres": "^3.4.4",
+    "sqlite3": "^5.1.7"
+  }
+}

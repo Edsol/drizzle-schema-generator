@@ -3,3 +3,7 @@ node_modules
 bun.lockb
 .DS_Store
 dist
+example/src/mysql.ts
+example/src/postgres.ts
+example/src/schema/postgres.ts
+example/src/schema/mysql.ts

@@ -40,9 +40,10 @@ adapter.getConnection();
 
 ## Roadmap
 
-[ ] Extend to other databases (postreSQL, SQLite)
+[x] Extend to PostgreSQL
+[ ] Extend to SQLite ([coming soon](https://orm.drizzle.team/docs/schemas))
 
-[ ] Optimize performances
+[x] Optimize performances
 
 ## Use case
 
