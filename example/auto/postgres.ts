@@ -26,5 +26,9 @@ const db = drizzle(adatper.getConnection(), {
     logger: false
 });
 
-const { schema } = buildSchema(db);
+const { schema } = buildSchema(db, {
+    // Use it in case your database is too big and takes up too much RAM memory
+    // https://github.com/drizzle-team/drizzle-graphql/issues/11
+    relationsDepthLimit: 2
+});
 await startApollo({ schema });

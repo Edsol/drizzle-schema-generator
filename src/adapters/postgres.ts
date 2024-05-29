@@ -1,13 +1,7 @@
-// import { Connection, QueryResult } from "mysql2/promise";
-// import mysql from "mysql2/promise";
-// import { MySql2Database, MySqlQueryResult } from "drizzle-orm/mysql2";
-// import { sql, relations, ColumnBuilder, Table, Many, createMany, One } from "drizzle-orm";
-import { PgDatabase } from "drizzle-orm/pg-core";
-import { drizzle } from "drizzle-orm/postgres-js";
-import { Client } from "pg";
-import postgres from 'postgres';
-import * as pgCore from "drizzle-orm/pg-core";
 import { relations, ColumnBuilder, Many, One } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/postgres-js";
+import * as pgCore from "drizzle-orm/pg-core";
+import postgres from 'postgres';
 
 import { TableColumn, ForeignKey } from "../types/postgresTypes";
 import { AdapterConnection } from "drizzle-schema-generator/src/types/commonTypes";

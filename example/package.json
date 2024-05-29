@@ -15,7 +15,7 @@
     "@apollo/server": "^4.10.4",
     "dotenv": "^16.4.5",
     "drizzle": "^1.4.0",
-    "drizzle-graphql": "0.6",
+    "drizzle-graphql": "^0.8.1",
     "drizzle-orm": "^0.30.10",
     "graphql": "^16.8.1",
     "json-cyclic": "^1.0.2",

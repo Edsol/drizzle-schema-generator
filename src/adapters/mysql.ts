@@ -1,11 +1,12 @@
-import { Connection, QueryResult } from "mysql2/promise";
-import mysql from "mysql2/promise";
-import { MySql2Database, MySqlQueryResult } from "drizzle-orm/mysql2";
 import { sql, relations, ColumnBuilder, Many, One } from "drizzle-orm";
+import { MySql2Database, MySqlQueryResult } from "drizzle-orm/mysql2";
 import * as mysqlCore from "drizzle-orm/mysql-core";
+import { Connection } from "mysql2/promise";
+import mysql from "mysql2/promise";
 import { drizzle } from "drizzle-orm/mysql2";
 
-import { TableColumn, AdapterConnection, TableInfo, ForeignKey } from "../types/mysqlTypes";
+import { TableColumn, TableInfo, ForeignKey } from "../types/mysqlTypes";
+import { AdapterConnection } from "drizzle-schema-generator/src/types/commonTypes";
 import { AdapterInterface } from "./adapterInterface";
 const pluralize = require('pluralize');
 
@@ -259,17 +260,16 @@ export default class Mysql implements AdapterInterface {
      */
     private async prepareTable(tableName: string, columns: TableColumn[]) {
         const tableColumns = {};
-
         for (const column of columns) {
             const columnName = column.COLUMN_NAME;
 
-            if (mysqlCore[column.type]) {
-                if (column.type === 'varchar') {
-                    tableColumns[columnName] = mysqlCore[column.type](columnName, column.CHARACTER_MAXIMUM_LENGTH);
-                } else if (column.type === 'bigint') {
-                    tableColumns[columnName] = mysqlCore[column.type](columnName, column.NUMERIC_PRECISION);
+            if (mysqlCore[column.COLUMN_TYPE]) {
+                if (column.COLUMN_TYPE === 'varchar') {
+                    tableColumns[columnName] = mysqlCore[column.COLUMN_TYPE](columnName, column.CHARACTER_MAXIMUM_LENGTH);
+                } else if (column.COLUMN_TYPE === 'bigint') {
+                    tableColumns[columnName] = mysqlCore[column.COLUMN_TYPE](columnName, column.NUMERIC_PRECISION);
                 } else {
-                    tableColumns[columnName] = mysqlCore[column.type](columnName);
+                    tableColumns[columnName] = mysqlCore[column.COLUMN_TYPE](columnName);
                 }
             } else {
                 tableColumns[columnName] = mysqlCore.text(columnName);
@@ -290,7 +290,8 @@ export default class Mysql implements AdapterInterface {
      * @return {*} 
      * @memberof Mysql
      */
-    private async setColumnParams(column: TableColumn, tableColumn: ColumnBuilder, tableName: string, foreignKey?: TableInfo) {
+    private setColumnParams(column: TableColumn, tableColumn: ColumnBuilder, tableName: string, foreignKey?: TableInfo) {
+
         switch (column.constraint_type) {
             case "PRIMARY KEY":
                 tableColumn.primaryKey();
