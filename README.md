@@ -16,9 +16,10 @@ npm install drizzle-schema-generator
 
 [x] Optimize performances
 
+[ ] Unify adapter logic
+
 [ ] Extend to SQLite ([coming soon](https://orm.drizzle.team/docs/schemas))
 
-[ ] Unify the logic of the adapter
 
 ## Usage
 
